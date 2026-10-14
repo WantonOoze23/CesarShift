@@ -201,12 +201,12 @@ class TrithemiusAttackDialog(ctk.CTkToplevel):
         ctk.CTkLabel(self, text="Введіть пару повідомлень для автоматичного знаходження ключів.",
                      font=ctk.CTkFont(size=12), text_color="gray70").pack(pady=(0, 10))
 
-        ctk.CTkLabel(self, text="Незашифрований текст (Plaintext):").pack(anchor="w", padx=20)
+        ctk.CTkLabel(self, text="Незашифрований текст:").pack(anchor="w", padx=20)
         self.plain_text = ctk.CTkTextbox(self, height=100)
         self.plain_text.pack(fill="x", padx=20, pady=(0, 10))
         add_context_menu(self.plain_text)  # Додаємо контекстне меню
 
-        ctk.CTkLabel(self, text="Зашифрований текст (Ciphertext):").pack(anchor="w", padx=20)
+        ctk.CTkLabel(self, text="Зашифрований текст:").pack(anchor="w", padx=20)
         self.cipher_text = ctk.CTkTextbox(self, height=100)
         self.cipher_text.pack(fill="x", padx=20, pady=(0, 15))
         add_context_menu(self.cipher_text)  # Додаємо контекстне меню

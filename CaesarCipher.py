@@ -155,28 +155,23 @@ class TrithemiusCipher:
         if not plaintext or not ciphertext or len(plaintext) != len(ciphertext):
             return {"error": "Тексти порожні або мають різну довжину!"}
 
-        test_positions, test_p_chars, test_c_chars = [], [], []
-        for i, (p, c) in enumerate(zip(plaintext, ciphertext)):
-            if cls._get_alphabet(p):
-                test_positions.append(i)
-                test_p_chars.append(p)
-                test_c_chars.append(c)
-                if len(test_positions) >= 3:
-                    break
+        required_shifts = {}
+        for p, (p_char, c_char) in enumerate(zip(plaintext, ciphertext)):
+            alphabet = cls._get_alphabet(p_char)
+            if alphabet:
+                p_idx = alphabet.index(p_char)
+                c_idx = alphabet.index(c_char)
+                shift = (c_idx - p_idx) % len(alphabet)
+                required_shifts[p] = (shift, len(alphabet))
+
+        test_positions = list(required_shifts.items())[:3]
 
         linear_key = None
-        for a in range(34):
-            for b in range(34):
+        for a in range(100):
+            for b in range(100):
                 match = True
-                for i in range(min(2, len(test_positions))):
-                    pos = test_positions[i]
-                    p_char, c_char = test_p_chars[i], test_c_chars[i]
-                    alphabet = cls._get_alphabet(p_char)
-
-                    expected_shift = cls._calculate_shift(pos, 'linear', (a, b))
-                    actual_shift = (alphabet.index(c_char) - alphabet.index(p_char)) % len(alphabet)
-
-                    if expected_shift % len(alphabet) != actual_shift:
+                for p, (req_shift, alpha_len) in test_positions[:2]:
+                    if (a * p + b) % alpha_len != req_shift:
                         match = False
                         break
                 if match and cls.encrypt(plaintext, 'linear', (a, b)) == ciphertext:
@@ -186,19 +181,12 @@ class TrithemiusCipher:
         if linear_key: results['linear'] = linear_key
 
         nonlinear_key = None
-        for a in range(34):
-            for b in range(34):
-                for c in range(34):
+        for a in range(35):
+            for b in range(35):
+                for c in range(35):
                     match = True
-                    for i in range(min(3, len(test_positions))):
-                        pos = test_positions[i]
-                        p_char, c_char = test_p_chars[i], test_c_chars[i]
-                        alphabet = cls._get_alphabet(p_char)
-
-                        expected_shift = cls._calculate_shift(pos, 'nonlinear', (a, b, c))
-                        actual_shift = (alphabet.index(c_char) - alphabet.index(p_char)) % len(alphabet)
-
-                        if expected_shift % len(alphabet) != actual_shift:
+                    for p, (req_shift, alpha_len) in test_positions[:3]:
+                        if (a * (p ** 2) + b * p + c) % alpha_len != req_shift:
                             match = False
                             break
                     if match and cls.encrypt(plaintext, 'nonlinear', (a, b, c)) == ciphertext:
@@ -208,37 +196,67 @@ class TrithemiusCipher:
             if nonlinear_key: break
         if nonlinear_key: results['nonlinear'] = nonlinear_key
 
-        keyword_chars = ["?"] * len(plaintext)
-        has_uk = False
+        best_keyword = None
+        max_len = min(50, len(plaintext))
 
-        for p, (p_char, c_char) in enumerate(zip(plaintext, ciphertext)):
-            alphabet = cls._get_alphabet(p_char)
-            if alphabet:
-                if alphabet in (cls.UK_LOWER, cls.UK_UPPER): has_uk = True
-                p_idx, c_idx = alphabet.index(p_char), alphabet.index(c_char)
-                shift = (c_idx - p_idx) % len(alphabet)
+        for L in range(1, max_len + 1):
+            possible_keyword_en = ""
+            possible_keyword_uk = ""
+            valid_length = True
 
-                base_alphabet = cls.UK_UPPER if alphabet in (cls.UK_LOWER, cls.UK_UPPER) else cls.EN_UPPER
-                keyword_chars[p] = base_alphabet[shift % len(base_alphabet)]
+            for i in range(L):
+                valid_char_en = None
+                valid_char_uk = None
+                has_letters = False
 
-        best_pattern = None
-        for L in range(1, len(plaintext) // 2 + 1):
-            pattern = ["?"] * L
-            valid = True
-            for i, char in enumerate(keyword_chars):
-                if char != "?":
-                    if pattern[i % L] == "?":
-                        pattern[i % L] = char
-                    elif pattern[i % L] != char:
-                        valid = False
+                for p, _ in required_shifts.items():
+                    if p % L == i:
+                        has_letters = True
                         break
-            if valid and "?" not in pattern:
-                best_pattern = "".join(pattern)
-                break
 
-        if best_pattern:
-            results['keyword'] = best_pattern
-        elif all(c != "?" for c in keyword_chars) and keyword_chars:
-            results['keyword'] = "".join(keyword_chars)
+                if not has_letters:
+                    possible_keyword_en += 'A'
+                    possible_keyword_uk += 'А'
+                    continue
+
+                for candidate in cls.EN_UPPER:
+                    cand_idx = cls.EN_UPPER.index(candidate)
+                    is_match = True
+                    for p, (req_shift, alpha_len) in required_shifts.items():
+                        if p % L == i:
+                            if cand_idx % alpha_len != req_shift:
+                                is_match = False
+                                break
+                    if is_match:
+                        valid_char_en = candidate
+                        break
+
+                for candidate in cls.UK_UPPER:
+                    cand_idx = cls.UK_UPPER.index(candidate)
+                    is_match = True
+                    for p, (req_shift, alpha_len) in required_shifts.items():
+                        if p % L == i:
+                            if cand_idx % alpha_len != req_shift:
+                                is_match = False
+                                break
+                    if is_match:
+                        valid_char_uk = candidate
+                        break
+
+                if valid_char_en is None and valid_char_uk is None:
+                    valid_length = False
+                    break
+                else:
+                    possible_keyword_en += valid_char_en if valid_char_en else '?'
+                    possible_keyword_uk += valid_char_uk if valid_char_uk else '?'
+
+            if valid_length:
+                if cls.encrypt(plaintext, 'keyword', possible_keyword_en) == ciphertext or \
+                   cls.encrypt(plaintext, 'keyword', possible_keyword_uk) == ciphertext:
+                    best_keyword = f"{possible_keyword_en} (EN)  /  {possible_keyword_uk} (UA)"
+                    break
+
+        if best_keyword:
+            results['keyword'] = best_keyword
 
         return results
